@@ -1,8 +1,8 @@
 # String Split
 
-Strings splitted with, guess what... SIMD.
+Strings splitted with SIMD.
 
-It's possible to add several characters to be split by, and it will generate the appropriate code with template magic.
+It's possible to add several characters to be split by, and it will generate the appropriate code with some meta programming.
 
 For example, a string split by 2 chars (passed through Args...) compiles into the following: (MSVC 14)
 
@@ -21,5 +21,3 @@ test        edi,edi
 ```
 
 Also, I've added a convenience class StringPiece to act like a string_view until it's no longer experimental.
-
-TODO: Add some kind of iterator
