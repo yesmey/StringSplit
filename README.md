@@ -1,6 +1,6 @@
 # String Split
 
-Strings splitted with SIMD. It's kind of silly actually.
+Strings splitted with SIMD.
 
 It's possible to add several characters to be split by, and it will generate the appropriate code with some meta programming.
 
