@@ -31,9 +31,6 @@ public:
     const char* begin() const { return _begin; }
     const char* end() const { return _end; }
 
-    StringPiece subpiece(int64_t first, int64_t end) const {
-        return StringPiece(_begin + first, _begin + end);
-    }
 private:
     const char* _begin;
     const char* _end;
@@ -102,22 +99,21 @@ void const_for_each(F&& f)
 }
 
 template<char... Args>
-std::vector<StringPiece> split(const std::string& str)
+void split(std::vector<StringPiece>& vec, const std::string& str)
 {
-    StringPiece source(str.c_str(), str.c_str() + str.size());
-
-    std::vector<StringPiece> vec;
-    int64_t charspassed = 0;
-    int64_t tokenStartPos = 0;
+    const char* const ptr = str.c_str();
+    const auto size = str.size();
+    int charspassed = 0;
+    int tokenStartPos = 0;
 
     do
     {
-        const __m128i xmm1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(source.begin() + charspassed));
+        const __m128i xmm1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(ptr + charspassed));
  
         __m128i mask;
         details::const_for_each<Args...>([&](const __m128i cmpVal, const bool first)
         {
-            if (first)
+            if (first) // will be computed in compile-time by any sane compiler
                 mask = _mm_cmpeq_epi8(xmm1, cmpVal);
             else
                 mask = _mm_or_si128(mask, _mm_cmpeq_epi8(xmm1, cmpVal));
@@ -127,25 +123,25 @@ std::vector<StringPiece> split(const std::string& str)
         while (movemask != 0)
         {
             // Get next offset from bitmask
-            unsigned long offset;
-            _BitScanForward(&offset, movemask);
-            int64_t offsetdiff = static_cast<int64_t>(offset);
+            unsigned long temp;
+            _BitScanForward(&temp, movemask);
+            int offset = static_cast<int>(temp);
 
             // Insert stringpiece into vector
-            vec.emplace_back(source.subpiece(tokenStartPos, charspassed + offsetdiff));
-            tokenStartPos = charspassed + offsetdiff + 1;
+            vec.emplace_back(ptr + tokenStartPos, ptr + charspassed + offset);
+
+            // Set our starting position after
+            tokenStartPos = charspassed + offset + sizeof(char);
 
             // Remove this offset from bitmask
-            movemask &= ~(1 << offsetdiff);
+            movemask &= ~(1 << offset);
         }
 
         charspassed += 16;
-        //tokenStartPos = charspassed;
-    } while (charspassed < str.size());
+    } while (charspassed < size);
 
     // Add any rest of the string last
-    vec.emplace_back(source.subpiece(tokenStartPos, source.size()));
-    return vec;
+    vec.emplace_back(ptr + tokenStartPos, ptr + size);
 }
 
 }
