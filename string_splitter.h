@@ -6,14 +6,14 @@
 #include <array>
 #include <vector>
 
-namespace meyer
+namespace msu
 {
 #if defined(__clang__) || defined(__GNUC__)
-# define MEYER_ALIGNED(size) __attribute__((__aligned__(size)))
+# define MSU_ALIGNED(size) __attribute__((__aligned__(size)))
 #elif defined(_MSC_VER)
-# define MEYER_ALIGNED(size) __declspec(align(size))
+# define MSU_ALIGNED(size) __declspec(align(size))
 #else
-# error Cannot define MEYER_ALIGNED
+# error Cannot define MSU_ALIGNED
 #endif
 
 class StringPiece final
@@ -68,34 +68,34 @@ constexpr std::array<char, 16> fill_array()
 }
 
 template <char... Args, typename F, std::size_t I1, std::size_t... I, enable_if_eq_zero(sizeof...(I))>
-void const_in_subset(F&& f, const std::index_sequence<I1, I...>& i)
+void const_foreach_itr(F&& f, const std::index_sequence<I1, I...>& i)
 {
     constexpr auto tempChars = make_array<char, sizeof...(Args), Args...>();
-    MEYER_ALIGNED(16) constexpr auto filledArray = fill_array<std::get<I1>(tempChars)>();
+    MSU_ALIGNED(16) constexpr auto filledArray = fill_array<std::get<I1>(tempChars)>();
+    const auto val = _mm_load_si128(reinterpret_cast<const __m128i*>(filledArray.data()));
 
-    const auto&& val = _mm_load_si128(reinterpret_cast<const __m128i*>(filledArray.data()));
     f(std::forward<const __m128i>(val), std::bool_constant<I1 == 0>());
     (void)(i);
 }
 
 template <char... Args, typename F, std::size_t I1, std::size_t... I, enable_if_not_eq_zero(sizeof...(I))>
-void const_in_subset(F&& f, const std::index_sequence<I1, I...>& i)
+void const_foreach_itr(F&& f, const std::index_sequence<I1, I...>& i)
 {
+    // this is wierd
     constexpr auto tempChars = make_array<char, sizeof...(Args), Args...>();
-    MEYER_ALIGNED(16) constexpr auto filledArray = fill_array<std::get<I1>(tempChars)>();
-    const auto&& val = _mm_load_si128(reinterpret_cast<const __m128i*>(filledArray.data()));
+    MSU_ALIGNED(16) constexpr auto filledArray = fill_array<std::get<I1>(tempChars)>();
+    const auto val = _mm_load_si128(reinterpret_cast<const __m128i*>(filledArray.data()));
 
     f(std::forward<const __m128i>(val), std::bool_constant<I1 == 0>());
-    const_in_subset<Args...>(f, std::index_sequence<I...>());
+    const_foreach_itr<Args...>(f, std::index_sequence<I...>());
     (void)(i);
 }
 
 template <char... Args, typename F>
-void const_for_each(F&& f)
+void const_foreach(F&& f)
 {
-    const_in_subset<Args...>(f, std::make_index_sequence<sizeof...(Args)>());
+    const_foreach_itr<Args...>(f, std::make_index_sequence<sizeof...(Args)>());
 }
-
 }
 
 template<char... Args>
@@ -111,9 +111,9 @@ void split(std::vector<StringPiece>& vec, const std::string& str)
         const __m128i xmm1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(ptr + charspassed));
  
         __m128i mask;
-        details::const_for_each<Args...>([&](const __m128i cmpVal, const bool first)
+        details::const_foreach<Args...>([&](const __m128i cmpVal, const bool first)
         {
-            if (first) // will be computed in compile-time by any sane compiler
+            if (first)
                 mask = _mm_cmpeq_epi8(xmm1, cmpVal);
             else
                 mask = _mm_or_si128(mask, _mm_cmpeq_epi8(xmm1, cmpVal));
